@@ -1,0 +1,38 @@
+# Use Debian Bookworm for stable Qt6 support
+# Platform will be determined by the build environment or --platform flag
+FROM debian:bookworm
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Build Essentials, CMake, and Dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    pkg-config \
+    dpkg-dev \
+    # Qt6 Dependencies (Comprehensive set)
+    qt6-base-dev \
+    qt6-declarative-dev \
+    qt6-multimedia-dev \
+    qt6-l10n-tools \
+    qt6-tools-dev \
+    qt6-tools-dev-tools \
+    # VLC Dependency
+    libvlc-dev \
+    # X11/XCB (Required for Qt6 Gui)
+    libxcb-xinerama0 \
+    libxcb-cursor0 \
+    libxkbcommon-dev \
+    # Helper for finding files
+    findutils \
+    # Utilities
+    sed \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# The script expects the project structure to be present
+# We will mount your project root to /app during 'docker run'
+# This command runs your provided bash script
+CMD ["bash", "scripts/build_pi_deb.sh"]

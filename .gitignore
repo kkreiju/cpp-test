@@ -1,0 +1,57 @@
+# Build directories
+build-windows/
+build-pi/
+build/
+build-*/
+cmake-build-*/
+
+# IDE
+.vs/
+.vscode/settings.json
+*.user
+*.suo
+*.ncb
+*.sdf
+
+# Compiled output
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.deb
+
+# Qt generated
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+*.qmlc
+*.jsc
+
+# External SDKs (download separately)
+external/vlc-sdk-windows/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+*.log.old
+
+# Package output
+nctv-player_*.deb
+
+# Aptly
+exported_keys/
+
+# External
+vlc-sdk-windows/
+
+# Playlist
+playlist/
+
+# Markdown
+md/

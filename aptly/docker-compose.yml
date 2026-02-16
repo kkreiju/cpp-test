@@ -1,0 +1,14 @@
+services:
+  aptly-server:
+    build: .  # Looks for Dockerfile in the current directory (aptly/)
+    container_name: nctv_aptly
+    ports:
+      - "8080:8080"
+    # Privileged mode is REQUIRED for the entropy generator (rng-tools)
+    privileged: true 
+    volumes:
+      # This maps the key to a folder in your Windows machine so you can see it
+      - ./exported_keys:/app_keys
+      # This maps the current directory (where .deb files are moved) to /packages
+      - .:/packages:ro
+    restart: unless-stopped
