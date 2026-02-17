@@ -23,7 +23,7 @@ Rectangle {
             font.pixelSize: 72
             font.weight: Font.Bold
             font.letterSpacing: 12
-            color: "#e94560"
+            color: "#8dcb2c"
 
             SequentialAnimation on opacity {
                 loops: Animation.Infinite
@@ -57,7 +57,7 @@ Rectangle {
                 id: progressBar
                 height: parent.height
                 radius: 2
-                color: "#e94560"
+                color: "#8dcb2c"
 
                 SequentialAnimation on width {
                     loops: Animation.Infinite

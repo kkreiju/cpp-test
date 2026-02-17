@@ -12,7 +12,8 @@ if (!(Test-Path $BuildOutDir)) { New-Item -Path $BuildOutDir -ItemType Directory
 Write-Host "[1/4] Compiling and Packaging .deb (Multi-Arch)..." -ForegroundColor Cyan
 
 # Define architectures to build
-$Architectures = @("linux/arm64", "linux/arm/v7")
+#$Architectures = @("linux/arm64", "linux/arm/v7")
+$Architectures = @("linux/arm/v7")
 
 foreach ($Arch in $Architectures) {
     Write-Host ">>> Preparing Build Engine for $Arch..." -ForegroundColor Yellow

@@ -32,6 +32,7 @@ class ZonePlayer : public QObject
     Q_PROPERTY(QString currentMediaPath  READ currentMediaPath  NOTIFY currentMediaPathChanged)
     Q_PROPERTY(int     currentIndex      READ currentIndex      NOTIFY currentIndexChanged)
     Q_PROPERTY(int     playlistSize      READ playlistSize      NOTIFY playlistSizeChanged)
+    Q_PROPERTY(bool    is4K              READ is4K              NOTIFY is4KChanged)
 
 public:
     explicit ZonePlayer(const QString &zoneName, QObject *parent = nullptr);
@@ -45,6 +46,7 @@ public:
     QString currentMediaPath() const;
     int     currentIndex() const;
     int     playlistSize() const;
+    bool    is4K() const;
 
     // ── Configuration ──
     Q_INVOKABLE void setImageDuration(int ms);
@@ -66,12 +68,14 @@ signals:
     void currentMediaPathChanged();
     void currentIndexChanged();
     void playlistSizeChanged();
+    void is4KChanged();
     void mediaFinished();
     void errorOccurred(const QString &message);
 
 private slots:
     void onImageTimerTimeout();
     void onMediaEndReached();
+    void checkVideoResolution();
 
 private:
     // ── Internal helpers ──
@@ -94,6 +98,7 @@ private:
     QString         m_zoneName;
     bool            m_isPlaying       = false;
     bool            m_showImage       = false;
+    bool            m_is4K            = false;
     QString         m_currentImageSrc;
     QString         m_currentMediaPath;
 

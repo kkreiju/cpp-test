@@ -64,12 +64,19 @@ void ZonePlayer::initVlc()
     }
 #endif
 
+#ifdef Q_OS_WIN
     const char *args[] = {
         "--no-xlib",              // No X11 threading issues (harmless on Windows)
         "--no-video-title-show",  // Don't overlay filename on video
         "--quiet",                // Reduce VLC noise
         "--no-audio",             // Digital signage typically muted
     };
+#else
+    const char *args[] = {
+        "--avcodec-hw=v4l2_m2m", // Use Video4Linux2 Memory-to-Memory hardware decoding
+        "--no-xlib",             // Skip X11 overhead if possible
+    };
+#endif
 
     m_vlcInstance = libvlc_new(sizeof(args) / sizeof(args[0]), args);
     if (!m_vlcInstance) {
@@ -91,6 +98,8 @@ void ZonePlayer::initVlc()
         libvlc_event_attach(m_vlcEvents, libvlc_MediaPlayerEndReached,
                             vlcEventCallback, this);
         libvlc_event_attach(m_vlcEvents, libvlc_MediaPlayerEncounteredError,
+                            vlcEventCallback, this);
+        libvlc_event_attach(m_vlcEvents, libvlc_MediaPlayerPlaying,
                             vlcEventCallback, this);
     }
 
@@ -127,6 +136,9 @@ void ZonePlayer::vlcEventCallback(const libvlc_event_t *event, void *userData)
         qWarning() << "[ZonePlayer]" << self->m_zoneName << "VLC playback error";
         QMetaObject::invokeMethod(self, "onMediaEndReached", Qt::QueuedConnection);
         break;
+    case libvlc_MediaPlayerPlaying:
+        QMetaObject::invokeMethod(self, "checkVideoResolution", Qt::QueuedConnection);
+        break;
     default:
         break;
     }
@@ -139,6 +151,7 @@ QString ZonePlayer::zoneName() const           { return m_zoneName; }
 bool    ZonePlayer::isPlaying() const          { return m_isPlaying; }
 bool    ZonePlayer::showImage() const          { return m_showImage; }
 QString ZonePlayer::currentImageSource() const { return m_currentImageSrc; }
+bool    ZonePlayer::is4K() const               { return m_is4K; }
 QString ZonePlayer::currentMediaPath() const   { return m_currentMediaPath; }
 int     ZonePlayer::currentIndex() const       { return m_currentIndex; }
 int     ZonePlayer::playlistSize() const       { return m_playlist.size(); }
@@ -191,6 +204,17 @@ void ZonePlayer::createZoneWindow()
         parentWindow = ws->mainWindow();
     if (!parentWindow) {
         qWarning() << "[ZonePlayer]" << m_zoneName << "Parent window not available yet";
+        return;
+    }
+
+    // Optimization: Reuse existing window if parent hasn't changed.
+    // This prevents VLC black screen issues caused by destroying the HWND during playback.
+    if (m_zoneWindow && m_zoneWindow->parent() == parentWindow) {
+        m_zoneWindow->setGeometry(m_geometry);
+        if (m_zOrder <= 0)
+            m_zoneWindow->lower();
+        else
+            m_zoneWindow->raise();
         return;
     }
 
@@ -354,6 +378,12 @@ void ZonePlayer::playVideo(const QString &filePath)
     }
     m_imageTimer.stop();
 
+    // Reset 4K status (assume not 4K until detected)
+    if (m_is4K) {
+        m_is4K = false;
+        emit is4KChanged();
+    }
+
     if (!m_vlcPlayer || !m_vlcInstance) {
         qCritical() << "[ZonePlayer]" << m_zoneName << "VLC not initialized";
         return;
@@ -404,6 +434,11 @@ void ZonePlayer::showStaticImage(const QString &filePath)
 {
     // Stop any VLC video playback and hide the native zone window
     if (m_vlcPlayer) {
+    if (m_is4K) {
+        m_is4K = false;
+        emit is4KChanged();
+    }
+
         libvlc_media_player_stop(m_vlcPlayer);
     }
     if (m_zoneWindow) {
@@ -445,6 +480,25 @@ void ZonePlayer::onMediaEndReached()
 
     // Advance to next item (loops via modulo in next())
     next();
+}
+
+void ZonePlayer::checkVideoResolution()
+{
+    if (!m_vlcPlayer) return;
+
+    unsigned width = 0, height = 0;
+    if (libvlc_video_get_size(m_vlcPlayer, 0, &width, &height) == 0) {
+        // Typically 4K is 3840x2160 or 4096x2160.
+        // We'll treat anything >= 3800 width as "4K" for this purpose.
+        bool newIs4K = (width >= 3800);
+        if (m_is4K != newIs4K) {
+            m_is4K = newIs4K;
+            emit is4KChanged();
+            qInfo() << "[ZonePlayer]" << m_zoneName
+                    << "Video resolution detected:" << width << "x" << height
+                    << "is4K:" << m_is4K;
+        }
+    }
 }
 
 // ──────────────────────────────────────────────

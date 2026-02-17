@@ -31,6 +31,7 @@ Item {
     // ── Background Zone (z: 0) ──
     BackgroundZone {
         id: backgroundZone
+        visible: !mainPlayer.is4K
         x: 0;  y: 0
         width: 1920;  height: 1080
         z: 0
@@ -39,14 +40,17 @@ Item {
     // ── Main Zone (z: 1) ──
     MainZone {
         id: mainZone
-        x: 0;  y: 21
-        width: 1472;  height: 828
-        z: 1
+        x: 0
+        y: mainPlayer.is4K ? 0 : 21
+        width: mainPlayer.is4K ? 1920 : 1472
+        height: mainPlayer.is4K ? 1080 : 828
+        z: mainPlayer.is4K ? 10 : 1
     }
 
     // ── Horizontal Zone (z: 1) ──
     HorizontalZone {
         id: horizontalZone
+        visible: !mainPlayer.is4K
         x: 0;  y: 870
         width: 1920;  height: 189
         z: 1
@@ -55,6 +59,7 @@ Item {
     // ── Vertical Zone (z: 1) ──
     VerticalZone {
         id: verticalZone
+        visible: !mainPlayer.is4K
         x: 1472;  y: 21
         width: 448;  height: 849
         z: 1
