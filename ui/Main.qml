@@ -16,8 +16,8 @@ ApplicationWindow {
     color: "black"
     title: "NCTV Player"
 
-    width: 1920
-    height: 1080
+    width: screenWidth
+    height: screenHeight
 
     // ── State Machine ──
     // "splash"  → Splash screen visible (during startup / optimization)

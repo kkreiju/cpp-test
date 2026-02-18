@@ -27,14 +27,25 @@ Item {
         NumberAnimation { duration: 500; easing.type: Easing.InOutQuad }
     }
 
+    function updateGeometry() {
+        if (horizontalPlayer && windowService) {
+            var globalPos = mapToItem(null, 0, 0);
+            horizontalPlayer.setGeometry(globalPos.x, globalPos.y, width, height);
+            horizontalPlayer.setZOrder(z);
+            console.log("[HorizontalZone] Geometry update: " + globalPos.x + "," + globalPos.y + " " + width + "x" + height);
+        }
+    }
+
+    onWidthChanged: updateGeometry()
+    onHeightChanged: updateGeometry()
+    onXChanged: updateGeometry()
+    onYChanged: updateGeometry()
+
     Component.onCompleted: {
         console.log("[HorizontalZone] Initialized (" + width + "x" + height + ")");
         if (horizontalPlayer && windowService) {
-            var globalPos = mapToItem(null, 0, 0);
             horizontalPlayer.setWindowId(windowService.windowId());
-            horizontalPlayer.setGeometry(globalPos.x, globalPos.y, width, height);
-            horizontalPlayer.setZOrder(1);
-            console.log("[HorizontalZone] Zone window: " + globalPos.x + "," + globalPos.y + " " + width + "x" + height);
+            updateGeometry();
         }
     }
 }

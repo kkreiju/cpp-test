@@ -26,31 +26,11 @@
 // ──────────────────────────────────────────────
 // File-Based Rotating Logger
 // ──────────────────────────────────────────────
-static QFile   g_logFile;
-static QMutex  g_logMutex;
-static constexpr qint64 MAX_LOG_SIZE = 10 * 1024 * 1024; // 10 MB rotation threshold
-
+// ──────────────────────────────────────────────
+// Systemd / Journalctl Logging Integration
+// ──────────────────────────────────────────────
 static void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
-    QMutexLocker locker(&g_logMutex);
-
-    // Rotate log if it exceeds maximum size
-    if (g_logFile.size() > MAX_LOG_SIZE) {
-        g_logFile.close();
-
-        const QString logPath = g_logFile.fileName();
-        const QString backupPath = logPath + ".old";
-
-        QFile::remove(backupPath);
-        QFile::rename(logPath, backupPath);
-
-        g_logFile.setFileName(logPath);
-        g_logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text);
-    }
-
-    if (!g_logFile.isOpen())
-        return;
-
     // Level prefix
     const char *level = nullptr;
     switch (type) {
@@ -61,45 +41,29 @@ static void messageHandler(QtMsgType type, const QMessageLogContext &context, co
         case QtFatalMsg:    level = "FATAL"; break;
     }
 
-    const QString timestamp = QDateTime::currentDateTime().toString(Qt::ISODateWithMs);
-    const QString line = QStringLiteral("[%1] [%2] %3 (%4:%5)\n")
-                             .arg(timestamp, level, msg,
+    // Format: [Timestamp] [Level] Message (File:Line)
+    // We use fprintf(stderr) for direct unbuffered output to systemd/journalctl
+    QString formattedMsg = QStringLiteral("[%1] [%2] %3 (%4:%5)\n")
+                             .arg(QDateTime::currentDateTime().toString(Qt::ISODateWithMs),
+                                  level,
+                                  msg,
                                   context.file ? context.file : "unknown",
                                   QString::number(context.line));
 
-    QTextStream stream(&g_logFile);
-    stream << line;
-    stream.flush();
-
-    // Also mirror to stderr for development
-#ifdef NCTV_PLATFORM_DESKTOP
-    fprintf(stderr, "%s", line.toLocal8Bit().constData());
-#endif
+    fprintf(stderr, "%s", formattedMsg.toLocal8Bit().constData());
+    
+    // Critical: Flush immediately to ensure no logs are lost on crash
+    fflush(stderr); 
 }
 
 static void initializeLogging()
 {
-    QString logDir;
-    QString logPath;
-
-#ifdef NCTV_PLATFORM_PI
-    logDir  = QStringLiteral("/var/log");
-    logPath = QStringLiteral("/var/log/nctv-player.log");
-#else
-    logDir  = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    logPath = logDir + QStringLiteral("/nctv-player.log");
-#endif
-
-    QDir().mkpath(logDir);
-
-    g_logFile.setFileName(logPath);
-    if (g_logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
-        qInstallMessageHandler(messageHandler);
-        qInfo() << "=== NCTV Player started ===" << QDateTime::currentDateTime().toString(Qt::ISODate);
-        qInfo() << "Log file:" << logPath;
-    } else {
-        fprintf(stderr, "WARNING: Could not open log file %s\n", logPath.toLocal8Bit().constData());
-    }
+    // Disable buffering for stderr to ensure immediate log output
+    setbuf(stderr, nullptr);
+    
+    qInstallMessageHandler(messageHandler);
+    qInfo() << "=== NCTV Player started (Systemd Logging Enabled) ===";
+    qInfo() << "Build Version: " << "1.0.2"; 
 }
 
 // ──────────────────────────────────────────────
@@ -107,6 +71,19 @@ static void initializeLogging()
 // ──────────────────────────────────────────────
 int main(int argc, char *argv[])
 {
+#ifdef NCTV_PLATFORM_PI
+    // Force X11 backend for Raspberry Pi to ensure VLC embedding works
+    // This fixes "could not connect to display" when running from systemd/SSH
+    if (qEnvironmentVariableIsEmpty("DISPLAY")) {
+        qputenv("DISPLAY", ":0");
+        fprintf(stderr, "WARNING: DISPLAY not set, defaulting to :0\n");
+    }
+
+    // Force Qt to use XCB (X11) backend instead of Wayland/EGLFS
+    // We need X11 window IDs for libVLC embedding
+    qputenv("QT_QPA_PLATFORM", "xcb");
+#endif
+
     // Initialize logging before anything else
     initializeLogging();
 
@@ -165,6 +142,16 @@ int main(int argc, char *argv[])
     rootContext->setContextProperty("videoOptimizer",    &videoOptimizer);
     rootContext->setContextProperty("cliService",        &cliService);
     rootContext->setContextProperty("windowService",     WindowService::instance());
+
+    // Get primary screen resolution
+    QScreen *primaryScreen = QGuiApplication::primaryScreen();
+    QRect screenGeometry = primaryScreen->geometry();
+    int screenWidth = screenGeometry.width();
+    int screenHeight = screenGeometry.height();
+    qInfo() << "Primary screen resolution detected:" << screenWidth << "x" << screenHeight;
+
+    rootContext->setContextProperty("screenWidth", screenWidth);
+    rootContext->setContextProperty("screenHeight", screenHeight);
 
     // Load root QML
     const QUrl mainQml(QStringLiteral("qrc:/ui/Main.qml"));

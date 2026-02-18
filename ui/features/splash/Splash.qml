@@ -19,7 +19,7 @@ Rectangle {
         // Logo / Brand
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: "NCTV"
+            text: "ARJAY"
             font.pixelSize: 72
             font.weight: Font.Bold
             font.letterSpacing: 12

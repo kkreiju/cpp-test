@@ -30,14 +30,26 @@ Item {
         NumberAnimation { duration: 500; easing.type: Easing.InOutQuad }
     }
 
+    function updateGeometry() {
+        if (backgroundPlayer && windowService) {
+            var globalPos = mapToItem(null, 0, 0);
+            backgroundPlayer.setGeometry(globalPos.x, globalPos.y, width, height);
+            backgroundPlayer.setZOrder(z);
+            console.log("[BackgroundZone] Geometry update: " + globalPos.x + "," + globalPos.y + " " + width + "x" + height);
+        }
+    }
+
+    onWidthChanged: updateGeometry()
+    onHeightChanged: updateGeometry()
+    onXChanged: updateGeometry()
+    onYChanged: updateGeometry()
+    // onZChanged: updateGeometry() // Z usually static, but can add if needed
+
     Component.onCompleted: {
         console.log("[BackgroundZone] Initialized (" + width + "x" + height + ")");
         if (backgroundPlayer && windowService) {
-            var globalPos = mapToItem(null, 0, 0);
             backgroundPlayer.setWindowId(windowService.windowId());
-            backgroundPlayer.setGeometry(globalPos.x, globalPos.y, width, height);
-            backgroundPlayer.setZOrder(0);
-            console.log("[BackgroundZone] Zone window: " + globalPos.x + "," + globalPos.y + " " + width + "x" + height);
+            updateGeometry();
         }
     }
 }

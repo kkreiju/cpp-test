@@ -86,6 +86,7 @@ private:
     void showStaticImage(const QString &filePath);
     bool isImageFile(const QString &filePath) const;
     bool isVideoFile(const QString &filePath) const;
+    void getVideoDimensions(libvlc_media_t *media, unsigned &width, unsigned &height);
 
     // Per-zone native child window management
     void createZoneWindow();

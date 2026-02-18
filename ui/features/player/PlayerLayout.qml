@@ -32,36 +32,47 @@ Item {
     BackgroundZone {
         id: backgroundZone
         visible: !mainPlayer.is4K
-        x: 0;  y: 0
-        width: 1920;  height: 1080
+        anchors.fill: parent
         z: 0
     }
 
     // ── Main Zone (z: 1) ──
+    // Uses 1472/1920 (~0.766) width and 828/1080 (~0.766) height
     MainZone {
         id: mainZone
         x: 0
-        y: mainPlayer.is4K ? 0 : 21
-        width: mainPlayer.is4K ? 1920 : 1472
-        height: mainPlayer.is4K ? 1080 : 828
+        y: mainPlayer.is4K ? 0 : Math.round(parent.height * 0.0194) // ~21px top margin
+        
+        // Responsive width/height
+        width: mainPlayer.is4K ? parent.width : Math.round(parent.width * 0.7667)
+        height: mainPlayer.is4K ? parent.height : Math.round(parent.height * 0.7667)
+        
         z: mainPlayer.is4K ? 10 : 1
     }
 
     // ── Horizontal Zone (z: 1) ──
+    // Uses 1920 width and 189/1080 (~0.175) height
+    // Y position: 870/1080 (~0.805)
     HorizontalZone {
         id: horizontalZone
         visible: !mainPlayer.is4K
-        x: 0;  y: 870
-        width: 1920;  height: 189
+        x: 0
+        y: Math.round(parent.height * 0.8056)
+        width: parent.width
+        height: Math.round(parent.height * 0.175)
         z: 1
     }
 
     // ── Vertical Zone (z: 1) ──
+    // Uses 448/1920 (~0.233) width and 849/1080 (~0.786) height
+    // X position: 1472/1920 (~0.766)
     VerticalZone {
         id: verticalZone
         visible: !mainPlayer.is4K
-        x: 1472;  y: 21
-        width: 448;  height: 849
+        x: Math.round(parent.width * 0.7667)
+        y: Math.round(parent.height * 0.0194) // Same top margin as main
+        width: Math.round(parent.width * 0.2333)
+        height: Math.round(parent.height * 0.7861)
         z: 1
     }
 

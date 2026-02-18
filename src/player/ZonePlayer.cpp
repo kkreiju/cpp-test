@@ -7,6 +7,7 @@
 #include <QDir>
 #include <QCoreApplication>
 #include <QGuiApplication>
+#include <QThread>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -47,6 +48,29 @@ ZonePlayer::~ZonePlayer()
 }
 
 // ──────────────────────────────────────────────
+// Static VLC Log Callback (Redirects to Qt/Systemd)
+// ──────────────────────────────────────────────
+static void vlcLogCallback(void *data, int level, const libvlc_log_t *ctx, const char *fmt, va_list args)
+{
+    Q_UNUSED(data);
+    Q_UNUSED(ctx);
+
+    // Filter out noisy debug/notice logs unless needed
+    // LIBVLC_DEBUG=0, LIBVLC_NOTICE=2, LIBVLC_WARNING=3, LIBVLC_ERROR=4
+    if (level < LIBVLC_WARNING) return; 
+
+    char buffer[1024];
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+
+    switch (level) {
+        case LIBVLC_NOTICE:  qInfo() << "[LibVLC]" << buffer; break;
+        case LIBVLC_WARNING: qWarning() << "[LibVLC]" << buffer; break;
+        case LIBVLC_ERROR:   qCritical() << "[LibVLC]" << buffer; break;
+        default:             qDebug() << "[LibVLC]" << buffer; break;
+    }
+}
+
+// ──────────────────────────────────────────────
 // libVLC Initialization
 // ──────────────────────────────────────────────
 void ZonePlayer::initVlc()
@@ -72,9 +96,28 @@ void ZonePlayer::initVlc()
         "--no-audio",             // Digital signage typically muted
     };
 #else
+    // Linux / Raspberry Pi Arguments
     const char *args[] = {
-        "--avcodec-hw=v4l2_m2m", // Use Video4Linux2 Memory-to-Memory hardware decoding
-        "--no-xlib",             // Skip X11 overhead if possible
+        "--no-osd",
+        "--drop-late-frames",
+        
+        // Hardware decode, but translate the pixels for X11 compatibility
+        // Fixes "get_buffer() failed" / "video output creation failed" on Pi X11
+        "--avcodec-hw=v4l2m2m-copy", 
+        
+        // Tell VLC to route the video through the X11 server (since we are in X11)
+        "--vout=xcb_x11",            
+        
+        // Force the X11 window to cover the entire TV (for the 4K overlay case)
+        "--fullscreen",              
+        
+        // Ensure it renders above your Qt UI
+        "--video-on-top",
+        
+        "--no-video-title-show",
+        "--verbose=2",            // Keep verbose logging for debugging
+        "--no-audio",
+        "--no-xlib"               // Crucial: Tell VLC not to interact with the X11 desktop directly in a way that conflicts with Qt
     };
 #endif
 
@@ -84,6 +127,9 @@ void ZonePlayer::initVlc()
         emit errorOccurred("Failed to create libVLC instance");
         return;
     }
+
+    // Register Log Callback
+    libvlc_log_set(m_vlcInstance, vlcLogCallback, this);
 
     m_vlcPlayer = libvlc_media_player_new(m_vlcInstance);
     if (!m_vlcPlayer) {
@@ -103,7 +149,7 @@ void ZonePlayer::initVlc()
                             vlcEventCallback, this);
     }
 
-    qInfo() << "[ZonePlayer]" << m_zoneName << "libVLC initialized";
+    qInfo() << "[ZonePlayer]" << m_zoneName << "libVLC initialized with logging";
 }
 
 void ZonePlayer::releaseVlc()
@@ -389,14 +435,6 @@ void ZonePlayer::playVideo(const QString &filePath)
         return;
     }
 
-    // Show the native child window for VLC rendering
-    if (m_zoneWindow) {
-        m_zoneWindow->show();
-        if (m_zOrder <= 0)
-            m_zoneWindow->lower();
-        else
-            m_zoneWindow->raise();
-    }
 
     // Create and load the media
     libvlc_media_t *media = libvlc_media_new_path(m_vlcInstance,
@@ -406,6 +444,67 @@ void ZonePlayer::playVideo(const QString &filePath)
         qCritical() << "[ZonePlayer]" << m_zoneName << "Failed to create VLC media:" << filePath;
         emit errorOccurred("Failed to create VLC media for: " + filePath);
         return;
+    }
+
+    // Check resolution before playing
+    unsigned width = 0, height = 0;
+    getVideoDimensions(media, width, height);
+    
+    // Determine if content is 4K (width >= 3000)
+    bool is4KContent = (width >= 3000);
+    if (m_is4K != is4KContent) {
+        m_is4K = is4KContent;
+        emit is4KChanged();
+    }
+    
+    qInfo() << "[ZonePlayer]" << m_zoneName << "Video resolution:" << width << "x" << height 
+            << (is4KContent ? "[4K - Overlay Mode]" : "[Standard - Embedded Mode]");
+
+    if (is4KContent) {
+        // 4K MODE: Detach from Qt window, render as overlay
+        // We do NOT call createZoneWindow() or set HWND.
+        // VLC will create its own window. We force it to fullscreen.
+        
+        // Hide the embedded window if it exists (so it doesn't block the overlay)
+        if (m_zoneWindow) {
+            m_zoneWindow->hide();
+        }
+        
+        // Ensure no HWND is set (detach if previously attached)
+#ifdef Q_OS_WIN
+        libvlc_media_player_set_hwnd(m_vlcPlayer, nullptr);
+#elif defined(Q_OS_LINUX)
+        libvlc_media_player_set_xwindow(m_vlcPlayer, 0);
+#endif
+        
+        // Force fullscreen
+        libvlc_set_fullscreen(m_vlcPlayer, 1);
+        
+    } else {
+        // STANDARD MODE: Embed in Qt window
+        // Ensure fullscreen is OFF (so it fits in the window)
+        libvlc_set_fullscreen(m_vlcPlayer, 0);
+
+        // Show the native child window for VLC rendering
+        createZoneWindow(); 
+        
+        if (m_zoneWindow) {
+            // FORCE re-attachment of the window handle to VLC
+            // This is necessary because if we came from 4K mode, we detached it.
+            // createZoneWindow() skips attachment if reusing an existing window.
+            quintptr winId = m_zoneWindow->winId();
+#ifdef Q_OS_WIN
+            libvlc_media_player_set_hwnd(m_vlcPlayer, reinterpret_cast<void *>(winId));
+#elif defined(Q_OS_LINUX)
+            libvlc_media_player_set_xwindow(m_vlcPlayer, static_cast<uint32_t>(winId));
+#endif
+
+            m_zoneWindow->show();
+            if (m_zOrder <= 0)
+                m_zoneWindow->lower();
+            else
+                m_zoneWindow->raise();
+        }
     }
 
     // Hardware-accelerated decoding hints
@@ -514,4 +613,49 @@ bool ZonePlayer::isVideoFile(const QString &filePath) const
 {
     const QString ext = QFileInfo(filePath).suffix().toLower();
     return s_videoExtensions.contains(ext);
+}
+
+void ZonePlayer::getVideoDimensions(libvlc_media_t *media, unsigned &width, unsigned &height)
+{
+    width = 0;
+    height = 0;
+    if (!media) return;
+
+    // Use libvlc_media_parse_with_options instead of deprecated libvlc_media_parse
+    // libvlc_media_parse_local: Parse local files (fast)
+    // Timeout: 1000ms (should be instant for local files)
+    int status = libvlc_media_parse_with_options(media, libvlc_media_parse_local, 1000);
+    if (status == -1) {
+        qWarning() << "[ZonePlayer]" << m_zoneName << "Failed to trigger media parsing";
+        return;
+    }
+
+    // Wait for parsing to complete (synchronous wait for local files)
+    // In libVLC 3.0+, parsing is async. We block briefly to ensure dimensions are ready.
+    for (int i = 0; i < 50; ++i) { // Wait up to ~500ms
+        libvlc_media_parsed_status_t parsedStatus = libvlc_media_get_parsed_status(media);
+        if (parsedStatus == libvlc_media_parsed_status_done) {
+            break;
+        }
+        if (parsedStatus == libvlc_media_parsed_status_failed || 
+            parsedStatus == libvlc_media_parsed_status_timeout) {
+            qWarning() << "[ZonePlayer]" << m_zoneName << "Media parsing failed or timed out";
+            return;
+        }
+        QThread::msleep(10);
+    }
+
+    libvlc_media_track_t **tracks = nullptr;
+    unsigned trackCount = libvlc_media_tracks_get(media, &tracks);
+
+    if (trackCount > 0) {
+        for (unsigned i = 0; i < trackCount; ++i) {
+            if (tracks[i]->i_type == libvlc_track_video) {
+                width = tracks[i]->video->i_width;
+                height = tracks[i]->video->i_height;
+                break; // Found primary video track
+            }
+        }
+        libvlc_media_tracks_release(tracks, trackCount);
+    }
 }
