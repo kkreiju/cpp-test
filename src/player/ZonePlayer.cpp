@@ -435,6 +435,35 @@ void ZonePlayer::playVideo(const QString &filePath)
         return;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // PLAYER RECREATION STRATEGY
+    // To ensure 100% stability when switching between "Overlay/Zero-Copy" (4K)
+    // and "Embedded/XCB" (1080p) modes, we DESTROY and RECREATE the player
+    // instance for every video. This clears all internal vout state.
+    // ─────────────────────────────────────────────────────────────────────────
+    if (m_vlcPlayer) {
+        libvlc_media_player_stop(m_vlcPlayer);
+        libvlc_media_player_release(m_vlcPlayer);
+        m_vlcPlayer = nullptr;
+    }
+
+    m_vlcPlayer = libvlc_media_player_new(m_vlcInstance);
+    if (!m_vlcPlayer) {
+        qCritical() << "[ZonePlayer]" << m_zoneName << "FATAL: Failed to recreate libVLC media player";
+        emit errorOccurred("Failed to recreate libVLC player");
+        return;
+    }
+
+    // Re-attach Event Callbacks (must be done on every new player instance)
+    m_vlcEvents = libvlc_media_player_event_manager(m_vlcPlayer);
+    if (m_vlcEvents) {
+        libvlc_event_attach(m_vlcEvents, libvlc_MediaPlayerEndReached,
+                            vlcEventCallback, this);
+        libvlc_event_attach(m_vlcEvents, libvlc_MediaPlayerEncounteredError,
+                            vlcEventCallback, this);
+        libvlc_event_attach(m_vlcEvents, libvlc_MediaPlayerPlaying,
+                            vlcEventCallback, this);
+    }
 
     // Create and load the media
     libvlc_media_t *media = libvlc_media_new_path(m_vlcInstance,
