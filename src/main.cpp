@@ -21,7 +21,6 @@
 #include "services/PidService.h"
 #include "services/WindowService.h"
 #include "player/ZonePlayer.h"
-#include "utils/VideoOptimizer.h"
 
 // ──────────────────────────────────────────────
 // File-Based Rotating Logger
@@ -122,10 +121,6 @@ int main(int argc, char *argv[])
     ZonePlayer horizontalPlayer("horizontal");
     ZonePlayer verticalPlayer("vertical");
 
-    // Initialize video optimizer
-    VideoOptimizer videoOptimizer;
-    videoOptimizer.setPlaylistRoot(config.playlistRoot());
-
     // ──────────────────────────────────────────────
     // QML Engine Setup & C++ → QML Bridge
     // ──────────────────────────────────────────────
@@ -139,7 +134,7 @@ int main(int argc, char *argv[])
     rootContext->setContextProperty("mainPlayer",        &mainPlayer);
     rootContext->setContextProperty("horizontalPlayer",  &horizontalPlayer);
     rootContext->setContextProperty("verticalPlayer",    &verticalPlayer);
-    rootContext->setContextProperty("videoOptimizer",    &videoOptimizer);
+
     rootContext->setContextProperty("cliService",        &cliService);
     rootContext->setContextProperty("windowService",     WindowService::instance());
 
@@ -170,12 +165,15 @@ int main(int argc, char *argv[])
     qInfo() << "NCTV Player UI loaded successfully.";
 
     // Start video optimization in background after UI is up
+    /*
+    // Video Optimizer Removed
     QObject::connect(&videoOptimizer, &VideoOptimizer::optimizationFinished,
                      [&playlistService]() {
         qInfo() << "Video optimization complete. Re-scanning playlists...";
         playlistService.scanAll();
     });
     videoOptimizer.startOptimization();
+    */
 
     // Cleanup on exit
     QObject::connect(&app, &QGuiApplication::aboutToQuit, [&]() {

@@ -55,10 +55,13 @@ ApplicationWindow {
     // ── Connections ──
 
     // Transition from splash → player when optimization is done
-    Connections {
-        target: videoOptimizer
-        function onOptimizationFinished() {
-            console.log("[Main.qml] Optimization finished, switching to player view");
+    // Transition from splash → player after a short delay (simulating boot)
+    Timer {
+        interval: 3000
+        running: true
+        repeat: false
+        onTriggered: {
+            console.log("[Main.qml] Boot delay finished, switching to player view");
             root.appState = "player";
         }
     }

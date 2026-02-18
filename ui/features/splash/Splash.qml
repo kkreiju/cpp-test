@@ -71,7 +71,7 @@ Rectangle {
         Text {
             id: statusText
             anchors.horizontalCenter: parent.horizontalCenter
-            text: typeof videoOptimizer !== "undefined" ? videoOptimizer.statusMessage : "Initializing..."
+            text: "Starting NCTV Player..."
             font.pixelSize: 14
             color: "#707080"
         }

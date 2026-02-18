@@ -80,7 +80,6 @@ set(SOURCES
     src/services/PlaylistService.cpp
     src/services/WindowService.cpp
     src/player/ZonePlayer.cpp
-    src/utils/VideoOptimizer.cpp
 )
 
 set(HEADERS
@@ -91,7 +90,6 @@ set(HEADERS
     include/services/PlaylistService.h
     include/services/WindowService.h
     include/player/ZonePlayer.h
-    include/utils/VideoOptimizer.h
 )
 
 # ──────────────────────────────────────────────
